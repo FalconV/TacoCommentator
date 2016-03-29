@@ -1,0 +1,73 @@
+import urllib
+import time
+import smtplib
+import socket
+
+fromaddr = 'ip_update@gmail.com'
+toaddrs  = 'falconv.uh@gmail.com'
+pub_ip = ""
+loc_ip = ""
+
+username = "falconv.uh@gmail.com"
+password = 'falconners'
+f = False
+
+def update():
+    global loc_ip, pub_ip,f
+    #print "sleeping 5 seconds"
+    time.sleep(5)
+    while not f:
+        try:
+            f = urllib.urlopen("http://icanhazip.com/")
+        except IOError, e:
+            # print "no internet !"
+            time.sleep(5)
+
+    if not loc_ip  and f:
+        # pub_ip = f.read()
+        loc_ip = (socket.gethostbyname(socket.gethostname()))
+        # print "getting the first ip"
+        # print loc_ip
+        sendmail(loc_ip)
+        # print "mail sent"
+
+    else:
+        if f:
+            # pub_ip2 = f.read()
+            loc_ip2 = (socket.gethostbyname(socket.gethostname()))
+            # print ip,ip2
+            if loc_ip != loc_ip2 and loc_ip and loc_ip2:
+                loc_ip = loc_ip2
+                # print "new ip",loc_ip,"sending mail"
+                sendmail(loc_ip)
+            else:
+                # print "ip is the same"
+                pass
+            f = False
+    # print ip
+
+def sendmail(ip):
+    a = False
+    while not a:
+        try:
+            # just to check if i have internet or not
+            a = urllib.urlopen("http://icanhazip.com/")
+            server = smtplib.SMTP('smtp.gmail.com:587')
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(username,password)
+            server.sendmail(fromaddr, toaddrs, ip)
+            server.quit()
+        except IOError, e:
+            # print "no internet"
+            # print e
+            time.sleep(5)
+            # sendmail(ip)
+
+
+print "program started"
+
+while 1:
+    update()
+    time.sleep(120)
