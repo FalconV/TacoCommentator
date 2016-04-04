@@ -20,31 +20,31 @@ def update():
         try:
             f = urllib.urlopen("http://icanhazip.com/")
         except IOError, e:
-            # print "no internet !"
+            #print "no internet !"
             time.sleep(5)
 
     if not loc_ip  and f:
         # pub_ip = f.read()
-        loc_ip = (socket.gethostbyname(socket.gethostname()))
-        # print "getting the first ip"
-        # print loc_ip
+        loc_ip = s.getsockname()[0]
+        #print "getting the first ip"
+        #print loc_ip
         sendmail(loc_ip)
-        # print "mail sent"
+        #print "mail sent"
 
     else:
         if f:
             # pub_ip2 = f.read()
-            loc_ip2 = (socket.gethostbyname(socket.gethostname()))
-            # print ip,ip2
+            loc_ip2 = s.getsockname()[0]
+            #print loc_ip,loc_ip2
             if loc_ip != loc_ip2 and loc_ip and loc_ip2:
                 loc_ip = loc_ip2
-                # print "new ip",loc_ip,"sending mail"
+                print "new ip",loc_ip,"sending mail"
                 sendmail(loc_ip)
             else:
-                # print "ip is the same"
+                print "ip is the same"
                 pass
             f = False
-    # print ip
+   # print ip
 
 def sendmail(ip):
     a = False
@@ -60,14 +60,16 @@ def sendmail(ip):
             server.sendmail(fromaddr, toaddrs, ip)
             server.quit()
         except IOError, e:
-            # print "no internet"
+            #print "no internet"
             # print e
             time.sleep(5)
             # sendmail(ip)
 
 
 print "program started"
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.connect(("gmail.com",8080))
 
 while 1:
     update()
-    time.sleep(120)
+    time.sleep(10)
