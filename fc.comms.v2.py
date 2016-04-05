@@ -8,6 +8,7 @@ import sys
 import Queue
 import time
 import serial
+import RPi.GPIO as GPIO
 
 def send(q):
     s = "0,0,0,0*324*\n"
@@ -76,7 +77,7 @@ def sock(q):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     
     #bind the socket to the port, MAKE SURE IP ADDRESS IS CORRECT EACH TIME $
-    server_address = (loc_ip, 8912)
+    server_address = (loc_ip, 8889)
     print ('starting up on %s port %s' % server_address)
     sock.bind(server_address)
     print (loc_ip)
@@ -84,10 +85,12 @@ def sock(q):
     #listen for incoming connections
     sock.listen(1)
     
-    print ('this is thread3')
+    #print ('this is thread3')
     #wait for connection
-    print ('waiting for a connection')
+    #print ('waiting for a connection')
+    GPIO.output(awaiting_connection_led, 1)
     connection, client_address = sock.accept()
+    GPIO.output(awaiting_connection_led, 0)
 
     while True:
         while True:
@@ -122,12 +125,13 @@ def sock(q):
 
 if __name__ == '__main__':
     loc_ip = ""
-
+    GPIO.setmode(GPIO.BCM)
+    awaiting_connection_led = 4
+    GPIO.setup(awaiting_connection_led, GPIO.OUT)
     quad_attached = 0
 
     if quad_attached:
         ser = serial.Serial('/dev/ttyUSB0', timeout=1, baudrate=115200)
-    
     queue = Queue.Queue()
     process1 = Process(target=send, args=(queue,))
     #process2 = Process(target=get, args=(queue,))
