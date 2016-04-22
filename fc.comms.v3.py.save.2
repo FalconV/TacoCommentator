@@ -1,0 +1,153 @@
+#  #!/usr/bin/python
+
+from __future__ import print_function
+from multiprocessing import Process, Queue
+import socket
+import sys
+#import Queue
+import time
+import serial
+import RPi.GPIO as GPIO
+import smtplib
+
+def send(q):
+    s = "0,0,0,0*324*\n"
+    q.put(s)
+    while True:
+        try:
+            s = q.get(False)
+            if s == "END":
+                return
+        except q.empty:
+                pass
+        print ('sending' + s)
+        if quad_attached:
+            #write to serial
+            ser.write(s)
+            received = ser.readline()
+            print (received)
+            while received != "OK\r\n":
+                #if the falcon waited too long for you
+                if received == "TIMEOUT\r\n" or received == "MISS\r\n":
+                    #repeat yourself
+                    ser.write(s)
+                    #print 'RTX'
+#                   print ('resending: ' + s)
+                else:
+                    pass
+#                   print (received)
+                #listen to the falcon while you wait
+                received = ser.readline()
+#               print (received)
+
+        time.sleep(1)
+
+def sock(q):
+
+    packcount = 0
+    
+    #grabbing the pi ip and sending it through email
+    ipsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    ipsock.connect(("gmail.com", 8080))
+    time.sleep(5)
+    loc_ip = ipsock.getsockname()[0]
+    server = smtplib.SMTP('smtp.gmail.com:587')
+    server.ehlo()
+    server.starttls()
+    server.ehlo()
+    server.login("falconv.uh@gmail.com",'falconners')
+    server.sendmail('ip_update@gmail.com','falconv.uh@gmail.com',loc_ip)
+    server.quit()
+    ipsock.close()
+    
+    ####socket setup####
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setblocking(1)
+    close_flag = 0
+    #bind the socket to the port, MAKE SURE IP ADDRESS AND PORT ARE CORRECT EACH TIME $
+    server_address = (loc_ip, 8891)
+    print ('starting up on %s port %s' % server_address)
+    sock.bind(server_address)
+    print (loc_ip)
+
+    #listen for incoming connections
+    sock.listen(1)
+    counting = 100000
+    #wait for connection
+    #while True:
+    GPIO.output(awaiting_connection_led, 1)
+    connection, client_address = sock.accept()
+    GPIO.output(awaiting_connection_led, 0)
+
+    while True:
+
+        try:
+            #receive the data in small chuncks and send back to client
+            while True:
+		time.sleep(1)
+                
+                print ('waiting on data')
+                data = connection.recv(24)
+                print ('data received')
+                if not data:
+                    print ('data is empty')
+                    close_flag = 1
+                    break
+                close_check = data[2:7]
+                if close_check == 'close':
+                    print ('closing conection')
+                    close_flag = 1
+                    break
+                print (data)
+                checksum = 0
+                for c in data[2:]:
+                    print (ord(c))
+                    checksum += ord(c)
+                s = data[2:] + '*' + "%d" % checksum + '*\n'
+                print ('received "%s"' % s)
+                q.put(s)
+                if data:
+                    print ('sending data back to the client')
+                    #data = data + 'penis'
+                    connection.sendall(data)
+                    break
+                else:
+                    print ('no more data from', client_address)
+                    break
+                      
+        finally:
+            #end of packet
+            if close_flag:
+                #if close flag set, end sock
+                break
+            packcount = packcount + 1
+            if packcount == 5:
+                close_flag = 1
+            print ('packet ', packcount, ' sent')
+
+    connection.close()
+    sock.close()
+
+if __name__ == '__main__':
+    loc_ip = ""
+    GPIO.setmode(GPIO.BCM)
+    awaiting_connection_led = 4
+    GPIO.setup(awaiting_connection_led, GPIO.OUT)
+    quad_attached = 0
+
+    if quad_attached:
+        ser = serial.Serial('/dev/ttyUSB0', timeout=1, baudrate=115200)
+
+    queue = Queue()
+    process1 = Process(target=send, args=(queue,))
+    process3 = Process(target=sock, args=(queue,))
+    print ('starting thread 1')
+    process1.start()
+    print ('starting thread 3')
+    process3.start()
+    print ('joining thread 1')
+    process1.join()
+    print ('joining thread 3')
+    process3.join()
+    print ('all done')
