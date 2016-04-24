@@ -3,6 +3,7 @@
 from __future__ import print_function
 from multiprocessing import Process, Queue
 import socket
+import select
 import sys
 import datetime
 import time
@@ -79,7 +80,8 @@ def sock(q):
     ####socket setup####
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setblocking(1)
+#    sock.setblocking(0)
+    sock.settimeout(10)
     close_flag = 0
     #bind the socket to the port, get ip and port from email
     port = 8888
@@ -112,55 +114,75 @@ def sock(q):
     connection, client_address = sock.accept()
     GPIO.output(awaiting_connection_led, 0)
     close_flag = 0
+    
+    input = [sock, sys.stdin, connection]
 
     while True:
+	print ('while True')
 	if close_flag == 1:
+	    pass
             pack_count = 0
             connection.close()
             GPIO.output(awaiting_connection_led, 1)
+	    print ('before accepting connection')
 	    connection, client_address = sock.accept()
+	    print ('after accepting connection')
             GPIO.output(awaiting_connection_led, 0)
 	    close_flag = 0
         try:
             #receive the data in small chuncks and put on queue
             while True:
-                data = connection.recv(24)
-		for d in data[2:len(data)]:
-		    if d == '=':
-			dataToSend = '';
-		    elif d == '\n':
-                        if len(dataToSend) != 19:
-                            dataToSend = '1500,1500,1250,1500'
+		print ('second while True')
+		r, w, e = select.select(input, [], [], 1.0)
+		for s in r:
+		    if s == sock: #handle getting new socket connections
+			print ('new connection found')
+			newClient, newAddress = sock.accept()
+			input.append(newClient) #add new connection to list of selections
+#		    elif s == sys.stdin and sys.stdin.read == 's': #handle keyboard inputs
+#			for i in range(100):
+#			    print ('keyboard input')
+#			pass #we can figure out what we want to do later
+		    else: #handle all other sockets
+                        data = connection.recv(24)
+		        print (data)
+    		        for d in data[2:len(data)]:
+    		            if d == '=':
+			        dataToSend = '';
+		            elif d == '\n':
+                                if len(dataToSend) != 19:
+                                    dataToSend = '1500,1500,1250,1500'
+                                    close_flag = 1
+			        break
+		            else:
+			        dataToSend += d;
+                        #print ('data received')
+                        if not data:
+                            print ('data is empty')
                             close_flag = 1
-			break
-		    else:
-			dataToSend += d;
-                #print ('data received')
-                if not data:
-                    print ('data is empty')
-                    close_flag = 1
-                    break
-                if dataToSend[0:4] == 'close':
-                    print ('closing conection')
-                    close_flag = 1
-                    break
-                #this security measure to be replicated and replaced on android app
-                if dataToSend[10:13] == '1250':
-                    rest_count += 1
-                    if rest_count > 100:
-                        close_flag = 1
-                        rest_count = 0
+                            dataToSend = '1500,1500,1250,1500'
+                            break
+                        if dataToSend[0:4] == 'close':
+                            print ('closing conection')
+                            close_flag = 1
+                            break
+                        #this security measure to be replicated and replaced on android app
+                        if dataToSend[10:13] == '1250':
+                            rest_count += 1
+                            if rest_count > 100:
+                                close_flag = 1
+                                rest_count = 0
+                                break
+                        else:
+                            rest_count = 0
+                        #print (data)
+                        checksum = 0
+                        for c in dataToSend:
+		            checksum += ord(c)
+                        s = dataToSend + '*' + '%d' % checksum + '*\n'
+		        print (datetime.datetime.now().strftime("%H:%M:%S.%f") + ' received %s' % s)
+                        q.put(s)
                         break
-                else:
-                    rest_count = 0
-                #print (data)
-                checksum = 0
-                for c in dataToSend:
-		    checksum += ord(c)
-                s = dataToSend + '*' + '%d' % checksum + '*\n'
-		print (datetime.datetime.now().strftime("%H:%M:%S.%f") + ' received %s' % s)
-                q.put(s)
-                break
                       
         finally:
             pack_count +=  1
